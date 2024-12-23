@@ -7,6 +7,24 @@ MAX_ERROR=1e-6
 EXPECTED_FILE="result/basic_baseline"
 ACTUAL_FILE="output"
 
+
+choice=$1
+# read -p "Please select an option(basic, red, mpibasic, mpired)" choice
+
+case $choice in
+    "basic")
+        echo "Compare with basic."
+        EXPECTED_FILE="result/basic"
+        ;;
+    "red")
+        echo "Compare with red."
+        EXPECTED_FILE="result/red"
+        ;;
+    *)
+        echo "Compare with basic."
+        ;;
+esac
+
 # 检查两个文件是否存在
 if [ ! -f "$EXPECTED_FILE" ]; then
     echo "标准文件 $EXPECTED_FILE 不存在"

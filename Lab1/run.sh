@@ -9,33 +9,32 @@ choice=$1
 
 case $choice in
     "basic")
-        echo "Run nbody_basic in serial mode."
         gcc -pg -g -Wall -o nbody_basic nbody_basic.c -lm
         rm -rf output
-        ./nbody_basic 5000 500 0.01 10 g 2>&1 | tee output
+        ./nbody_basic 5000 500 0.01 10 g 2>&1 | tee result/basic
         gprof ./nbody_basic gmon.out > profiling.txt
+        echo "Run nbody_basic in serial mode."
         ;;
     "red")
-        echo "Run nbody_red in serial mode."
         gcc -pg -g -Wall -o nbody_red nbody_red.c -lm
         rm -rf output
-        ./nbody_red 5000 500 0.01 10 g 2>&1 | tee output
+        ./nbody_red 5000 500 0.01 10 g 2>&1 | tee result/red
         gprof ./nbody_red gmon.out > profiling.txt
+        echo "Run nbody_red in serial mode."
         ;;
     "mpibasic")
+        mpicc -pg -g -Wall -o mpi_nbody_basic mpi_nbody_basic.c -lm
+        rm -rf output
+        mpirun -np 4 ./mpi_nbody_basic 5000 500 0.01 10 g 2>&1 | tee output
+        gprof ./mpi_nbody_basic gmon.out > profiling.txt
         echo "Run nbody_basic in parallel mode."
-        mpicc -g -Wall -o nbody_basic nbody_basic.c -lm
-        rm -rf output
-        ./nbody_basic 5000 500 0.01 10 g 2>&1 | tee output
         ;;
-    "mpibasic")
+    "nbody_red")
+        gcc -g -Wall -o mpi_nbody_red mpi_nbody_red.c -lm
+        rm -rf output
+        mpirun -np 4 ./mpi_nbody_red 5000 500 0.01 10 g 2>&1 | tee output
+        gprof ./mpi_nbody_red gmon.out > profiling.txt
         echo "Run nbody_red in parallel mode."
-        gcc -g -Wall -o nbody_basic nbody_basic.c -lm
-        rm -rf output
-        ./nbody_basic 5000 500 0.01 10 g 2>&1 | tee output
-        ;;
-    "mpired")
-        echo "n"
         ;;
     *)
         echo "选择了未知选项"
