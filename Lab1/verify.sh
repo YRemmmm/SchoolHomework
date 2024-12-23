@@ -20,6 +20,10 @@ case $choice in
         echo "Compare with red."
         EXPECTED_FILE="result/red"
         ;;
+    "test")
+        echo "Compare with test."
+        EXPECTED_FILE="result/test"
+        ;;
     *)
         echo "Compare with basic."
         ;;

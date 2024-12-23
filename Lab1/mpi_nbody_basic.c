@@ -60,6 +60,7 @@
 // #include "timer.h"
 
 #include <sys/time.h>
+#include <mpi.h>
 
 /* The argument now should be a double (not a pointer to a double) */
 #define GET_TIME(now) { \
@@ -115,14 +116,40 @@ int main(int argc, char* argv[]) {
 #  endif
    double start, finish;       /* For timings                */
 
+   // MPI
+   int rank, comm;
+   MPI_Init(&argc, &argv);
+   MPI_Comm_size(MPI_COMM_WORLD, &comm);
+   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+   const int nitems = 3;
+   int blocklengths[3] = {1, DIM, DIM};
+   MPI_Datatype types[3] = {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE};
+   MPI_Datatype mpi_particle_type;
+   MPI_Aint offsets[3];
+
+   offsets[0] = offsetof(struct particle_s, m);
+   offsets[1] = offsetof(struct particle_s, s);
+   offsets[2] = offsetof(struct particle_s, v);
+
+   MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_particle_type);
+   MPI_Type_commit(&mpi_particle_type);
+
+   // printf("my_rank = %d\n", rank);
+
    Get_args(argc, argv, &n, &n_steps, &delta_t, &output_freq, &g_i);
+
    curr = malloc(n*sizeof(struct particle_s));
    forces = malloc(n*sizeof(vect_t));
+
+   if (curr == NULL || forces == NULL) {
+      fprintf(stderr, "Memory allocation failed\n");
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+   }
    if (g_i == 'i')
       Get_init_cond(curr, n);
    else
       Gen_init_cond(curr, n);
-
    GET_TIME(start);
 #  ifdef COMPUTE_ENERGY
    Compute_energy(curr, n, &kinetic_energy, &potential_energy);
@@ -130,31 +157,53 @@ int main(int argc, char* argv[]) {
          potential_energy, kinetic_energy, kinetic_energy+potential_energy);
 #  endif
 #  ifndef NO_OUTPUT
-   Output_state(0, curr, n);
+   if (rank == 0) 
+      Output_state(0, curr, n);
 #  endif
+
+   int n_start, n_end, n_pre;
+   n_pre = n / comm;
+   if(n % comm > 0) n_pre++;
+   n_start = n_pre * rank;
+   n_end = n_pre * (rank + 1);
+   if (n_end > n) n_end = n;
+   n_pre = n_end - n_start;
+
+
    for (step = 1; step <= n_steps; step++) {
       t = step*delta_t;
 //    memset(forces, 0, n*sizeof(vect_t));
-      for (part = 0; part < n; part++)
+
+      for (part = n_start; part < n_end; part++)
          Compute_force(part, forces, curr, n);
-      for (part = 0; part < n; part++)
+
+      for (part = n_start; part < n_end; part++)
          Update_part(part, forces, curr, n, delta_t);
+
+      MPI_Gather(curr + n_start, n_pre, mpi_particle_type,
+               curr, n_pre, mpi_particle_type,
+               0, MPI_COMM_WORLD);
+      MPI_Bcast(curr, n, mpi_particle_type, 0, MPI_COMM_WORLD);
+
 #     ifdef COMPUTE_ENERGY
       Compute_energy(curr, n, &kinetic_energy, &potential_energy);
       printf("   PE = %e, KE = %e, Total Energy = %e\n",
             potential_energy, kinetic_energy, kinetic_energy+potential_energy);
 #     endif
 #     ifndef NO_OUTPUT
-      if (step % output_freq == 0)
+      if (step % output_freq == 0 && rank == 0)
          Output_state(t, curr, n);
 #     endif
    }
    
    GET_TIME(finish);
-   printf("Elapsed time = %e seconds\n", finish-start);
+   if (rank == 0) 
+      printf("Elapsed time = %e seconds\n", finish-start);
 
    free(curr);
    free(forces);
+   MPI_Type_free(&mpi_particle_type);
+   MPI_Finalize();
    return 0;
 }  /* main */
 
@@ -286,6 +335,7 @@ void Gen_init_cond(struct particle_s curr[], int n) {
  *            position and velocity) of the ith particle
  *    n:      number of particles
  */
+
 void Output_state(double time, struct particle_s curr[], int n) {
    int part;
    printf("%.2f\n", time);
@@ -322,6 +372,7 @@ void Output_state(double time, struct particle_s curr[], int n) {
  * Here, m_j is the mass of particle j and s_k is its position vector
  * (at time t). 
  */
+
 void Compute_force(int part, vect_t forces[], struct particle_s curr[], 
       int n) {
    int k;
