@@ -1,19 +1,19 @@
-/Lab1/gmon.out
-/Lab1/nbody_basic
-/Lab1/nbody_red
-/Lab1/mpi_nbody_basic
-/Lab1/mpi_nbody_red
-/Lab1/output
-/Lab1/profiling.txt
+mpi/Lab1/gmon.out
+mpi/Lab1/nbody_basic
+mpi/Lab1/nbody_red
+mpi/Lab1/mpi_nbody_basic
+mpi/Lab1/mpi_nbody_red
+mpi/Lab1/output
+mpi/Lab1/profiling.txt
+mpi/Lab1/log
 
-/Lab2/gmon.out
-/Lab2/nbody_basic
-/Lab2/nbody_red
-/Lab2/mpi_nbody_basic
-/Lab2/mpi_nbody_red
-/Lab2/output
-/Lab2/profiling.txt
+mpi/Lab2/gmon.out
+mpi/Lab2/nbody_basic
+mpi/Lab2/nbody_red
+mpi/Lab2/mpi_nbody_basic
+mpi/Lab2/mpi_nbody_red
+mpi/Lab2/output
+mpi/Lab2/profiling.txt
 
 buffer*
 .vscode
-/Lab1/log
