@@ -122,30 +122,26 @@ int main(int argc, char* argv[]) {
    MPI_Comm_size(MPI_COMM_WORLD, &comm);
    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-   const int nitems = 3;
-   int blocklengths[3] = {1, DIM, DIM};
-   MPI_Datatype types[3] = {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE};
-   MPI_Datatype mpi_particle_type;
-   MPI_Aint offsets[3];
-
-   offsets[0] = offsetof(struct particle_s, m);
-   offsets[1] = offsetof(struct particle_s, s);
-   offsets[2] = offsetof(struct particle_s, v);
-
-   MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_particle_type);
-   MPI_Type_commit(&mpi_particle_type);
-
-   // printf("my_rank = %d\n", rank);
-
    Get_args(argc, argv, &n, &n_steps, &delta_t, &output_freq, &g_i);
 
-   curr = malloc(n*sizeof(struct particle_s));
+   // Create the window
+   const int ARRAY_SIZE = 1;
+   MPI_Win win;
+   MPI_Win_allocate_shared(n*sizeof(struct particle_s), sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
+   
+
+   // Allocate shared memory
+   if (rank == 0) {
+      // Only process 0 needs to allocate memory
+      MPI_Win_allocate_shared(n * sizeof(struct particle_s), sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
+   } else {
+      // Other processes just need to get a pointer to the shared memory
+      MPI_Win_allocate_shared(0, sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
+      MPI_Win_shared_query(win, 0, &(MPI_Aint){0}, &(MPI_Aint){n * sizeof(struct particle_s)}, &curr);
+   }
+
    forces = malloc(n*sizeof(vect_t));
 
-   if (curr == NULL || forces == NULL) {
-      fprintf(stderr, "Memory allocation failed\n");
-      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-   }
    if (g_i == 'i')
       Get_init_cond(curr, n);
    else
@@ -170,20 +166,16 @@ int main(int argc, char* argv[]) {
    n_pre = n_end - n_start;
 
 
+   MPI_Barrier(MPI_COMM_WORLD);
    for (step = 1; step <= n_steps; step++) {
       t = step*delta_t;
-//    memset(forces, 0, n*sizeof(vect_t));
-
       for (part = n_start; part < n_end; part++)
          Compute_force(part, forces, curr, n);
 
+      MPI_Win_fence(0, win);
       for (part = n_start; part < n_end; part++)
          Update_part(part, forces, curr, n, delta_t);
-
-      MPI_Gather(curr + n_start, n_pre, mpi_particle_type,
-               curr, n_pre, mpi_particle_type,
-               0, MPI_COMM_WORLD);
-      MPI_Bcast(curr, n, mpi_particle_type, 0, MPI_COMM_WORLD);
+      MPI_Win_fence(0, win);
 
 #     ifdef COMPUTE_ENERGY
       Compute_energy(curr, n, &kinetic_energy, &potential_energy);
@@ -200,9 +192,8 @@ int main(int argc, char* argv[]) {
    if (rank == 0) 
       printf("Elapsed time = %e seconds\n", finish-start);
 
-   free(curr);
    free(forces);
-   MPI_Type_free(&mpi_particle_type);
+   MPI_Win_free(&win);
    MPI_Finalize();
    return 0;
 }  /* main */

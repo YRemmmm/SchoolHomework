@@ -14,5 +14,6 @@
 /Lab2/output
 /Lab2/profiling.txt
 
-buffer
+buffer*
 .vscode
+/Lab1/log

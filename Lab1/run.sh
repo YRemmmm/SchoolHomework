@@ -1,6 +1,7 @@
 #!/bin/bash
 
-export PATH=/home/yr/Public/mpi/openmpi/bin/:$PATH
+# export PATH=/home/yr/Public/mpi/openmpi/bin/:$PATH
+export PATH=/home/yr/Public/mpi/mpich/bin/:$PATH
 export PMIX_MCA_pcompress_base_silence_warning=1
 choice=$1
 # read -p "Please select an option(basic, red, mpibasic, mpired)" choice
@@ -31,7 +32,7 @@ case $choice in
         sh verify.sh basic
         ;;
     "mpired")
-        gcc -g -Wall -o mpi_nbody_red mpi_nbody_red.c -lm
+        mpicc -pg -g -Wall -o mpi_nbody_red mpi_nbody_red.c -lm
         rm -rf output
         mpirun -np 4 ./mpi_nbody_red 5000 500 0.01 10 g 2>&1 | tee output
         gprof ./mpi_nbody_red gmon.out > profiling.txt
@@ -42,4 +43,5 @@ case $choice in
         echo "Please select an option in: basic, red, mpibasic, mpired"
         ;;
 esac
+# --use-hwthread-cpus
 
