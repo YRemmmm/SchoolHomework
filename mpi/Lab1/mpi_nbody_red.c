@@ -85,18 +85,35 @@ int main(int argc, char* argv[]) {
       // for (part = 0; part < n - 1; part++)
       for (part = n_start; part < n_end && part < n - 1; part++)
          Compute_force(part, forces, masses, positions, n);
-      if (rank == 0) {
-         for (int i = 1; i < comm; i++) 
-         {
-            MPI_Recv(buffer_mpi+i*n_pre*DIM, DIM*(n-i*n_pre), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            for (int k = i*n_pre; k < n; k++)
+
+      // if (rank == 0) {
+      //    for (int i = 1; i < comm; i++) 
+      //    {
+      //       MPI_Recv(buffer_mpi+i*n_pre*DIM, DIM*(n-i*n_pre), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      //       for (int k = i*n_pre; k < n; k++)
+      //       {
+      //          forces[k * DIM + X] += buffer_mpi[k * DIM + X];
+      //          forces[k * DIM + Y] += buffer_mpi[k * DIM + Y];
+      //       }
+      //    }
+      // } else {
+      //    MPI_Send(forces+n_start*DIM, DIM*(n-n_start), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+      // }
+
+      for (int add_rank = 1, recv_rank = 2; add_rank * 2 <= comm; add_rank *= 2, recv_rank*=2) {
+         if (rank % recv_rank ==  0) {
+            MPI_Recv(buffer_mpi+(rank + add_rank)*n_pre*DIM, DIM*(n-(rank + add_rank)*n_pre), MPI_DOUBLE, (rank + add_rank), 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            for (int k = (rank + add_rank)*n_pre; k < n; k++)
             {
                forces[k * DIM + X] += buffer_mpi[k * DIM + X];
                forces[k * DIM + Y] += buffer_mpi[k * DIM + Y];
             }
+            // printf("recv: rank = %d, (rank + add_rank) = %d\n", rank, (rank+add_rank));
+         } 
+         else if (rank % recv_rank == add_rank && rank - add_rank >= 0) {
+            MPI_Send(forces+n_start*DIM, DIM*(n-n_start), MPI_DOUBLE, (rank - add_rank), 0, MPI_COMM_WORLD);
+            // printf("send: rank = %d, (rank - add_rank) = %d\n", rank, (rank-add_rank));
          }
-      } else {
-         MPI_Send(forces+n_start*DIM, DIM*(n-n_start), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
       }
 
       MPI_Bcast(forces, n * DIM, MPI_DOUBLE, 0, MPI_COMM_WORLD);
