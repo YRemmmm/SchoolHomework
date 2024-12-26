@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# export PATH=/home/yr/Public/mpi/openmpi/bin/:$PATH
-export PATH=/home/yr/Public/mpi/mpich/bin/:$PATH
+export PATH=/home/yr/Public/mpi/openmpi/bin/:$PATH
+# export PATH=/home/yr/Public/mpi/mpich/bin/:$PATH
 export PMIX_MCA_pcompress_base_silence_warning=1
 choice=$1
 # read -p "Please select an option(basic, red, mpibasic, mpired)" choice

@@ -92,9 +92,9 @@ void Get_args(int argc, char* argv[], int* n_p, int* n_steps_p,
 void Get_init_cond(struct particle_s curr[], int n);
 void Gen_init_cond(struct particle_s curr[], int n);
 void Output_state(double time, struct particle_s curr[], int n);
-void Compute_force(int part, vect_t forces[], struct particle_s curr[], 
+void Compute_force(int n_start, int part, vect_t forces[], struct particle_s curr[], 
       int n);
-void Update_part(int part, vect_t forces[], struct particle_s curr[], 
+void Update_part(int n_start, int part, vect_t forces[], struct particle_s curr[], 
       int n, double delta_t);
 void Compute_energy(struct particle_s curr[], int n, double* kin_en_p,
       double* pot_en_p);
@@ -135,12 +135,12 @@ int main(int argc, char* argv[]) {
       // Only process 0 needs to allocate memory
       MPI_Win_allocate_shared(n * sizeof(struct particle_s), sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
    } else {
+      int *disp_unit = malloc(sizeof(struct particle_s));;
+      *disp_unit = sizeof(struct particle_s);
       // Other processes just need to get a pointer to the shared memory
       MPI_Win_allocate_shared(0, sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
-      MPI_Win_shared_query(win, 0, &(MPI_Aint){0}, &(MPI_Aint){n * sizeof(struct particle_s)}, &curr);
+      MPI_Win_shared_query(win, 0, &(MPI_Aint){0}, disp_unit, &curr);
    }
-
-   forces = malloc(n*sizeof(vect_t));
 
    if (g_i == 'i')
       Get_init_cond(curr, n);
@@ -165,16 +165,18 @@ int main(int argc, char* argv[]) {
    if (n_end > n) n_end = n;
    n_pre = n_end - n_start;
 
+   forces = malloc(n_pre*sizeof(vect_t));
 
    MPI_Barrier(MPI_COMM_WORLD);
+   
    for (step = 1; step <= n_steps; step++) {
       t = step*delta_t;
       for (part = n_start; part < n_end; part++)
-         Compute_force(part, forces, curr, n);
+         Compute_force(n_start, part, forces, curr, n);
 
       MPI_Win_fence(0, win);
       for (part = n_start; part < n_end; part++)
-         Update_part(part, forces, curr, n, delta_t);
+         Update_part(n_start, part, forces, curr, n, delta_t);
       MPI_Win_fence(0, win);
 
 #     ifdef COMPUTE_ENERGY
@@ -364,7 +366,7 @@ void Output_state(double time, struct particle_s curr[], int n) {
  * (at time t). 
  */
 
-void Compute_force(int part, vect_t forces[], struct particle_s curr[], 
+void Compute_force(int n_start, int part, vect_t forces[], struct particle_s curr[], 
       int n) {
    int k;
    double mg; 
@@ -373,9 +375,9 @@ void Compute_force(int part, vect_t forces[], struct particle_s curr[],
 
 #  ifdef DEBUG
    printf("Current total force on particle %d = (%.3e, %.3e)\n",
-         part, forces[part][X], forces[part][Y]);
+         part, forces[part - n_start][X], forces[part - n_start][Y]);
 #  endif
-   forces[part][X] = forces[part][Y] = 0.0;
+   forces[part - n_start][X] = forces[part - n_start][Y] = 0.0;
    for (k = 0; k < n; k++) {
       if (k != part) {
       /* Compute force on part due to k */
@@ -393,8 +395,8 @@ void Compute_force(int part, vect_t forces[], struct particle_s curr[],
    #     endif
    
          /* Add force in to total forces */
-         forces[part][X] += f_part_k[X];
-         forces[part][Y] += f_part_k[Y];
+         forces[part - n_start][X] += f_part_k[X];
+         forces[part - n_start][Y] += f_part_k[Y];
       }
    }
 }  /* Compute_force */
@@ -415,7 +417,7 @@ void Compute_force(int part, vect_t forces[], struct particle_s curr[],
  * Note:  This version uses Euler's method to update both the velocity
  *    and the position.
  */
-void Update_part(int part, vect_t forces[], struct particle_s curr[], 
+void Update_part(int n_start, int part, vect_t forces[], struct particle_s curr[], 
       int n, double delta_t) {
    double fact = delta_t/curr[part].m;
 
@@ -423,12 +425,12 @@ void Update_part(int part, vect_t forces[], struct particle_s curr[],
    printf("Before update of %d:\n", part);
    printf("   Position  = (%.3e, %.3e)\n", curr[part].s[X], curr[part].s[Y]);
    printf("   Velocity  = (%.3e, %.3e)\n", curr[part].v[X], curr[part].v[Y]);
-   printf("   Net force = (%.3e, %.3e)\n", forces[part][X], forces[part][Y]);
+   printf("   Net force = (%.3e, %.3e)\n", forces[part - n_start][X], forces[part - n_start][Y]);
 #  endif
    curr[part].s[X] += delta_t * curr[part].v[X];
    curr[part].s[Y] += delta_t * curr[part].v[Y];
-   curr[part].v[X] += fact * forces[part][X];
-   curr[part].v[Y] += fact * forces[part][Y];
+   curr[part].v[X] += fact * forces[part - n_start][X];
+   curr[part].v[Y] += fact * forces[part - n_start][Y];
 #  ifdef DEBUG
    printf("Position of %d = (%.3e, %.3e), Velocity = (%.3e,%.3e)\n",
          part, curr[part].s[X], curr[part].s[Y],

@@ -1,180 +1,130 @@
-/* File:     nbody_red.c
- * Purpose:  Implement a 2-dimensional n-body solver that uses the 
- *           reduced algorithm.  So when the force on particle
- *           q due to particle k (q < k) is computed, the force
- *           on k due to q is also computed
- *
- * Compile:  gcc -g -Wall -o nbody_red nbody_red.c -lm
- *           If COMPUTE_ENERGY is defined, the program will print 
- *              total potential energy, total kinetic energy and total
- *              energy of the system at each time step.
- *           To turn off all output except for timing results, define NO_OUTPUT
- *           To get verbose output, define DEBUG
- *           Needs timer.h
- *
- * Run:      ./nbody_red <number of particles> <number of timesteps>  
- *              <size of timestep> <output frequency> <g|i>
- *              'g': generate initial conditions using a random number
- *                   generator
- *              'i': read initial conditions from stdin
- *           A timestep of 0.01 seems to work reasonably well for
- *           the automatically generated data.
- *
- * Input:    If 'g' is specified on the command line, none.  
- *           If 'i', mass, initial position and initial velocity of 
- *              each particle
- * Output:   If the output frequency is k, then position and velocity of 
- *              each particle at every kth timestep
- *
- * Algorithm: Slightly modified version of algorithm in James Demmel, 
- *    "CS 267, Applications of Parallel Computers:  Hierarchical 
- *    Methods for the N-Body Problem",
- *    www.cs.berkeley.edu/~demmel/cs267_Spr09, April 20, 2009.
- *
- *    for each timestep t {
- *       for each particle i
- *          compute f(i), the force on i
- *       for each particle i
- *          update position and velocity of i using F = ma
- *       if (output step) Output new positions and velocities
- *    }
- *
- * Force:    The force on particle i due to particle k is given by
- *
- *    -G m_i m_k (s_i - s_k)/|s_i - s_k|^3
- *
- * Here, m_j is the mass of particle j, s_j is its position vector
- * (at time t), and G is the gravitational constant (see below).  
- *
- * Note that the force on particle k due to particle i is 
- * -(force on i due to k).  So we can approximately halve the number 
- * of force computations.
- *
- * Integration:  We use Euler's method:
- *
- *    v_i(t+1) = v_i(t) + h v'_i(t)
- *    s_i(t+1) = s_i(t) + h v_i(t)
- *
- * Here, v_i(u) is the velocity of the ith particle at time u and
- * s_i(u) is its position.
- *
- * IPP:  Section 6.1.2 (pp. 273 and ff.)
- *
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-//#include "timer.h"
 
 #include <sys/time.h>
+#include <mpi.h>
 
-/* The argument now should be a double (not a pointer to a double) */
 #define GET_TIME(now) { \
    struct timeval t; \
    gettimeofday(&t, NULL); \
    now = t.tv_sec + t.tv_usec/1000000.0; \
 }
 
-#define DIM 2  /* Two-dimensional system */
-#define X 0    /* x-coordinate subscript */
-#define Y 1    /* y-coordinate subscript */
+#define DIM 2  
+#define X 0    
+#define Y 1    
 
-const double G = 6.673e-11;  /* Gravitational constant. */
-                             /* Units are m^3/(kg*s^2)  */
-// const double G = 0.1;  /* Gravitational constant. */
-                          /* Units are m^3/(kg*s^2)  */
-
-typedef double vect_t[DIM];  /* Vector type for position, etc. */
-
-struct particle_s {
-   double m;  /* Mass     */
-   vect_t s;  /* Position */
-   vect_t v;  /* Velocity */
-};
+const double G = 6.673e-11;  
 
 void Usage(char* prog_name);
 void Get_args(int argc, char* argv[], int* n_p, int* n_steps_p, 
       double* delta_t_p, int* output_freq_p, char* g_i_p);
-void Get_init_cond(struct particle_s curr[], int n);
-void Gen_init_cond(struct particle_s curr[], int n);
-void Output_state(double time, struct particle_s curr[], int n);
-void Compute_force(int part, vect_t forces[], struct particle_s curr[], 
-      int n);
-void Update_part(int part, vect_t forces[], struct particle_s curr[], 
-      int n, double delta_t);
-void Compute_energy(struct particle_s curr[], int n, double* kin_en_p,
-      double* pot_en_p);
+void Get_init_cond(double masses[], double positions[], double velocities[], int n);
+void Gen_init_cond(double masses[], double positions[], double velocities[], int n);
+void Output_state(double time, double positions[], double velocities[], int n);
+void Compute_force(int part, double forces[], double masses[], double positions[], int n);
+void Update_part(int part, double forces[], double masses[], double positions[], double velocities[], int n, double delta_t);
 
 /*--------------------------------------------------------------------*/
 int main(int argc, char* argv[]) {
-   int n;                      /* Number of particles        */
-   int n_steps;                /* Number of timesteps        */
-   int step;                   /* Current step               */
-   int part;                   /* Current particle           */
-   int output_freq;            /* Frequency of output        */
-   double delta_t;             /* Size of timestep           */
-   double t;                   /* Current Time               */
-   struct particle_s* curr;    /* Current state of system    */
-   vect_t* forces;             /* Forces on each particle    */
-   char g_i;                   /*_G_en or _i_nput init conds */
-#  ifdef COMPUTE_ENERGY
-   double kinetic_energy, potential_energy;
-#  endif
-   double start, finish;       /* For timings                */
+   int n;                      
+   int n_steps;                
+   int step;                   
+   int part;                   
+   int output_freq;            
+   double delta_t;             
+   double t;                   
+   double* masses;             
+   double* positions;          
+   double* velocities;         
+   double* forces;             
+   char g_i;                
+   double start, finish;    
+
+   // MPI
+   int comm, rank;
+   MPI_Init(&argc, &argv);
+   MPI_Comm_size(MPI_COMM_WORLD, &comm);
+   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
    Get_args(argc, argv, &n, &n_steps, &delta_t, &output_freq, &g_i);
-   curr = malloc(n*sizeof(struct particle_s));
-   forces = malloc(n*sizeof(vect_t));
+   masses = malloc(n * sizeof(double));
+   positions = malloc(n * DIM * sizeof(double));
+   velocities = malloc(n * DIM * sizeof(double));
+   forces = malloc(n * DIM * sizeof(double));
+   double* buffer_mpi = malloc(n * DIM * sizeof(double));
+
    if (g_i == 'i')
-      Get_init_cond(curr, n);
+      Get_init_cond(masses, positions, velocities, n);
    else
-      Gen_init_cond(curr, n);
+      Gen_init_cond(masses, positions, velocities, n);
 
    GET_TIME(start);
-#  ifdef COMPUTE_ENERGY
-   Compute_energy(curr, n, &kinetic_energy, &potential_energy);
-   printf("   PE = %e, KE = %e, Total Energy = %e\n",
-         potential_energy, kinetic_energy, kinetic_energy+potential_energy);
-#  endif
-#  ifndef NO_OUTPUT
-   Output_state(0, curr, n);
-#  endif
+   if (rank == 0)
+      Output_state(0, positions, velocities, n);
+
+   int n_start, n_end, n_pre;
+   n_pre = n / comm;
+   if(n % comm > 0) n_pre++;
+   n_start = n_pre * rank;
+   n_end = n_pre * (rank + 1);
+   if (n_end > n) n_end = n;
+   
+   // if (rank == 0) {
+   //    printf("n_start = %d\n", n_start);
+   //    printf("n_end = %d\n", n_end);
+   // }
+
    for (step = 1; step <= n_steps; step++) {
-      t = step*delta_t;
-      /* Particle n-1 will have all forces computed after call to
-       * Compute_force(n-2, . . .) */
-      memset(forces, 0, n*sizeof(vect_t));
-      for (part = 0; part < n-1; part++)
-         Compute_force(part, forces, curr, n);
+      t = step * delta_t;
+      memset(forces, 0, n * DIM * sizeof(double));
+      memset(buffer_mpi, 0, n * DIM * sizeof(double));
+
+      // for (part = 0; part < n - 1; part++)
+      for (part = n_start; part < n_end && part < n - 1; part++)
+         Compute_force(part, forces, masses, positions, n);
+      if (rank == 0) {
+         for (int i = 1; i < comm; i++) 
+         {
+            MPI_Recv(buffer_mpi+i*n_pre*DIM, DIM*(n-i*n_pre), MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            for (int k = i*n_pre; k < n; k++)
+            {
+               forces[k * DIM + X] += buffer_mpi[k * DIM + X];
+               forces[k * DIM + Y] += buffer_mpi[k * DIM + Y];
+            }
+         }
+      } else {
+         MPI_Send(forces+n_start*DIM, DIM*(n-n_start), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+      }
+
+      MPI_Bcast(forces, n * DIM, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+      // MPI_Barrier(MPI_COMM_WORLD);
+      
       for (part = 0; part < n; part++)
-         Update_part(part, forces, curr, n, delta_t);
-#     ifdef COMPUTE_ENERGY
-      Compute_energy(curr, n, &kinetic_energy, &potential_energy);
-      printf("   PE = %e, KE = %e, Total Energy = %e\n",
-            potential_energy, kinetic_energy, kinetic_energy+potential_energy);
-#     endif
-#     ifndef NO_OUTPUT
-      if (step % output_freq == 0)
-         Output_state(t, curr, n);
-#     endif
+      // for (part = n_start; part < n_end; part++)
+         Update_part(part, forces, masses, positions, velocities, n, delta_t);
+      
+      // MPI_Allgather(masses+n_start, n_pre, MPI_DOUBLE, masses, n_pre, MPI_DOUBLE, MPI_COMM_WORLD);
+
+      if (step % output_freq == 0 && rank == 0)
+         Output_state(t, positions, velocities, n);
    }
    
    GET_TIME(finish);
-   printf("Elapsed time = %e seconds\n", finish-start);
+   if (rank == 0)
+      printf("Elapsed time = %e seconds\n", finish - start);
 
-   free(curr);
+   free(masses);
+   free(positions);
+   free(velocities);
    free(forces);
+   free(buffer_mpi);
+   MPI_Finalize();
    return 0;
-}  /* main */
+} 
 
-
-/*---------------------------------------------------------------------
- * Function: Usage
- * Purpose:  Print instructions for command-line and exit
- * In arg:   
- *    prog_name:  the name of the program as typed on the command-line
- */
 void Usage(char* prog_name) {
    fprintf(stderr, "usage: %s <number of particles> <number of timesteps>\n",
          prog_name);
@@ -184,25 +134,8 @@ void Usage(char* prog_name) {
    fprintf(stderr, "   'i': program should get init conds from stdin\n");
     
    exit(0);
-}  /* Usage */
+} 
 
-
-/*---------------------------------------------------------------------
- * Function:  Get_args
- * Purpose:   Get command line args
- * In args:
- *    argc:            number of command line args
- *    argv:            command line args
- * Out args:
- *    n_p:             pointer to n, the number of particles
- *    n_steps_p:       pointer to n_steps, the number of timesteps
- *    delta_t_p:       pointer to delta_t, the size of each timestep
- *    output_freq_p:   pointer to output_freq, which is the number of
- *                     timesteps between steps whose output is printed
- *    g_i_p:           pointer to char which is 'g' if the init conds
- *                     should be generated by the program and 'i' if
- *                     they should be read from stdin
- */
 void Get_args(int argc, char* argv[], int* n_p, int* n_steps_p, 
       double* delta_t_p, int* output_freq_p, char* g_i_p) {
    if (argc != 6) Usage(argv[0]);
@@ -214,60 +147,24 @@ void Get_args(int argc, char* argv[], int* n_p, int* n_steps_p,
 
    if (*n_p <= 0 || *n_steps_p < 0 || *delta_t_p <= 0) Usage(argv[0]);
    if (*g_i_p != 'g' && *g_i_p != 'i') Usage(argv[0]);
+}  
 
-#  ifdef DEBUG
-   printf("n = %d\n", *n_p);
-   printf("n_steps = %d\n", *n_steps_p);
-   printf("delta_t = %e\n", *delta_t_p);
-   printf("output_freq = %d\n", *output_freq_p);
-   printf("g_i = %c\n", *g_i_p);
-#  endif
-}  /* Get_args */
-
-
-/*---------------------------------------------------------------------
- * Function:  Get_init_cond
- * Purpose:   Read in initial conditions:  mass, position and velocity
- *            for each particle
- * In args:  
- *    n:      number of particles
- * Out args:
- *    curr:   array of n structs, each struct stores the mass (scalar),
- *            position (vector), and velocity (vector) of a particle
- */
-void Get_init_cond(struct particle_s curr[], int n) {
+void Get_init_cond(double masses[], double positions[], double velocities[], int n) {
    int part;
 
    printf("For each particle, enter (in order):\n");
    printf("   its mass, its x-coord, its y-coord, ");
    printf("its x-velocity, its y-velocity\n");
    for (part = 0; part < n; part++) {
-      scanf("%lf", &curr[part].m);
-      scanf("%lf", &curr[part].s[X]);
-      scanf("%lf", &curr[part].s[Y]);
-      scanf("%lf", &curr[part].v[X]);
-      scanf("%lf", &curr[part].v[Y]);
+      scanf("%lf", &masses[part]);
+      scanf("%lf", &positions[part * DIM + X]);
+      scanf("%lf", &positions[part * DIM + Y]);
+      scanf("%lf", &velocities[part * DIM + X]);
+      scanf("%lf", &velocities[part * DIM + Y]);
    }
-}  /* Get_init_cond */
+} 
 
-/*---------------------------------------------------------------------
- * Function:  Gen_init_cond
- * Purpose:   Generate initial conditions:  mass, position and velocity
- *            for each particle
- * In args:  
- *    n:      number of particles
- * Out args:
- *    curr:   array of n structs, each struct stores the mass (scalar),
- *            position (vector), and velocity (vector) of a particle
- *
- * Note:      The initial conditions place all particles at
- *            equal intervals on the nonnegative x-axis with 
- *            identical masses, and identical initial speeds
- *            parallel to the y-axis.  However, some of the
- *            velocities are in the positive y-direction and
- *            some are negative.
- */
-void Gen_init_cond(struct particle_s curr[], int n) {
+void Gen_init_cond(double masses[], double positions[], double velocities[], int n) {
    int part;
    double mass = 5.0e24;
    double gap = 1.0e5;
@@ -275,170 +172,60 @@ void Gen_init_cond(struct particle_s curr[], int n) {
 
    srandom(1);
    for (part = 0; part < n; part++) {
-      curr[part].m = mass;
-      curr[part].s[X] = part*gap;
-      curr[part].s[Y] = 0.0;
-      curr[part].v[X] = 0.0;
-//    if (random()/((double) RAND_MAX) >= 0.5)
+      masses[part] = mass;
+      positions[part * DIM + X] = part * gap;
+      positions[part * DIM + Y] = 0.0;
+      velocities[part * DIM + X] = 0.0;
       if (part % 2 == 0)
-         curr[part].v[Y] = speed;
+         velocities[part * DIM + Y] = speed;
       else
-         curr[part].v[Y] = -speed;
+         velocities[part * DIM + Y] = -speed;
    }
-}  /* Gen_init_cond */
+}  
 
-
-/*---------------------------------------------------------------------
- * Function:  Output_state
- * Purpose:   Print the current state of the system
- * In args:
- *    curr:   array with n elements, curr[i] stores the state (mass,
- *            position and velocity) of the ith particle
- *    n:      number of particles
- */
-void Output_state(double time, struct particle_s curr[], int n) {
+void Output_state(double time, double positions[], double velocities[], int n) {
    int part;
    printf("%.2f\n", time);
    for (part = 0; part < n; part++) {
-//    printf("%.3f ", curr[part].m);
-      printf("%3d %10.3e ", part, curr[part].s[X]);
-      printf("  %10.3e ", curr[part].s[Y]);
-      printf("  %10.3e ", curr[part].v[X]);
-      printf("  %10.3e\n", curr[part].v[Y]);
+      printf("%3d %10.3e ", part, positions[part * DIM + X]);
+      printf("  %10.3e ", positions[part * DIM + Y]);
+      printf("  %10.3e ", velocities[part * DIM + X]);
+      printf("  %10.3e\n", velocities[part * DIM + Y]);
    }
    printf("\n");
-}  /* Output_state */
+} 
 
-
-/*---------------------------------------------------------------------
- * Function:  Compute_force
- * Purpose:   Compute the total force on particle part.  Exploit
- *            the symmetry (force on particle i due to particle k) 
- *            = -(force on particle k due to particle i) to also
- *            calculate partial forces on other particles.
- * In args:   
- *    part:   the particle on which we're computing the total force
- *    curr:   current state of the system:  curr[i] stores the mass,
- *            position and velocity of the ith particle
- *    n:      number of particles
- * Out arg:
- *    forces: force[i] stores the total force on the ith particle
- *
- * Note: This function uses the force due to gravitation.  So 
- * the force on particle i due to particle k is given by
- *
- *    m_i m_k (s_k - s_i)/|s_k - s_i|^2
- *
- * Here, m_j is the mass of particle j and s_k is its position vector
- * (at time t). 
- */
-void Compute_force(int part, vect_t forces[], struct particle_s curr[], 
-      int n) {
+void Compute_force(int part, double forces[], double masses[], double positions[], int n) {
    int k;
    double mg; 
-   vect_t f_part_k;
+   double f_part_k[DIM];
    double len, len_3, fact;
 
-#  ifdef DEBUG
-   printf("Current total force on particle %d = (%.3e, %.3e)\n",
-         part, forces[part][X], forces[part][Y]);
-#  endif
-   for (k = part+1; k < n; k++) {
-      /* Compute force on part due to k */
-      f_part_k[X] = curr[part].s[X] - curr[k].s[X];
-      f_part_k[Y] = curr[part].s[Y] - curr[k].s[Y];
-      len = sqrt(f_part_k[X]*f_part_k[X] + f_part_k[Y]*f_part_k[Y]);
-      len_3 = len*len*len;
-      mg = -G*curr[part].m*curr[k].m;
-      fact = mg/len_3;
+   for (k = part + 1; k < n; k++) {
+      f_part_k[X] = positions[part * DIM + X] - positions[k * DIM + X];
+      f_part_k[Y] = positions[part * DIM + Y] - positions[k * DIM + Y];
+      len = sqrt(f_part_k[X] * f_part_k[X] + f_part_k[Y] * f_part_k[Y]);
+      len_3 = len * len * len;
+      mg = -G * masses[part] * masses[k];
+      fact = mg / len_3;
       f_part_k[X] *= fact;
       f_part_k[Y] *= fact;
-#     ifdef DEBUG
-      printf("Force on particle %d due to particle %d = (%.3e, %.3e)\n",
-            part, k, f_part_k[X], f_part_k[Y]);
-#     endif
 
-      /* Add force in to total forces */
-      forces[part][X] += f_part_k[X];
-      forces[part][Y] += f_part_k[Y];
-      forces[k][X] -= f_part_k[X];
-      forces[k][Y] -= f_part_k[Y];
+      forces[part * DIM + X] += f_part_k[X];
+      forces[part * DIM + Y] += f_part_k[Y];
+      forces[k * DIM + X] -= f_part_k[X];
+      forces[k * DIM + Y] -= f_part_k[Y];
    }
-}  /* Compute_force */
+}  
+
+void Update_part(int part, double forces[], double masses[], double positions[], double velocities[], int n, double delta_t) {
+   double fact = delta_t / masses[part];
+
+   positions[part * DIM + X] += delta_t * velocities[part * DIM + X];
+   positions[part * DIM + Y] += delta_t * velocities[part * DIM + Y];
+   velocities[part * DIM + X] += fact * forces[part * DIM + X];
+   velocities[part * DIM + Y] += fact * forces[part * DIM + Y];
+}  
 
 
-/*---------------------------------------------------------------------
- * Function:  Update_part
- * Purpose:   Update the velocity and position for particle part
- * In args:
- *    part:    the particle we're updating
- *    forces:  forces[i] stores the total force on the ith particle
- *    n:       number of particles
- *
- * In/out arg:
- *    curr:    curr[i] stores the mass, position and velocity of the
- *             ith particle
- *
- * Note:  This version uses Euler's method to update both the velocity
- *    and the position.
- */
-void Update_part(int part, vect_t forces[], struct particle_s curr[], 
-      int n, double delta_t) {
-   double fact = delta_t/curr[part].m;
 
-#  ifdef DEBUG
-   printf("Before update of %d:\n", part);
-   printf("   Position  = (%.3e, %.3e)\n", curr[part].s[X], curr[part].s[Y]);
-   printf("   Velocity  = (%.3e, %.3e)\n", curr[part].v[X], curr[part].v[Y]);
-   printf("   Net force = (%.3e, %.3e)\n", forces[part][X], forces[part][Y]);
-#  endif
-   curr[part].s[X] += delta_t * curr[part].v[X];
-   curr[part].s[Y] += delta_t * curr[part].v[Y];
-   curr[part].v[X] += fact * forces[part][X];
-   curr[part].v[Y] += fact * forces[part][Y];
-#  ifdef DEBUG
-   printf("Position of %d = (%.3e, %.3e), Velocity = (%.3e,%.3e)\n",
-         part, curr[part].s[X], curr[part].s[Y],
-               curr[part].v[X], curr[part].v[Y]);
-#  endif
-// curr[part].s[X] += delta_t * curr[part].v[X];
-// curr[part].s[Y] += delta_t * curr[part].v[Y];
-}  /* Update_part */
-
-
-/*---------------------------------------------------------------------
- * Function:  Compute_energy
- * Purpose:   Compute the kinetic and potential energy in the system
- * In args:
- *    curr:   current state of the system, curr[i] stores the mass,
- *            position and velocity of the ith particle
- *    n:      number of particles
- * Out args:
- *    kin_en_p: pointer to kinetic energy of system
- *    pot_en_p: pointer to potential energy of system
- */
-void Compute_energy(struct particle_s curr[], int n, double* kin_en_p,
-      double* pot_en_p) {
-   int i, j;
-   vect_t diff;
-   double pe = 0.0, ke = 0.0;
-   double dist, speed_sqr;
-
-   for (i = 0; i < n; i++) {
-      speed_sqr = curr[i].v[X]*curr[i].v[X] + curr[i].v[Y]*curr[i].v[Y];
-      ke += curr[i].m*speed_sqr;
-   }
-   ke *= 0.5;
-
-   for (i = 0; i < n-1; i++) {
-      for (j = i+1; j < n; j++) {
-         diff[X] = curr[i].s[X] - curr[j].s[X];
-         diff[Y] = curr[i].s[Y] - curr[j].s[Y];
-         dist = sqrt(diff[X]*diff[X] + diff[Y]*diff[Y]);
-         pe += -G*curr[i].m*curr[j].m/dist;
-      }
-   }
-
-   *kin_en_p = ke;
-   *pot_en_p = pe;
-}  /* Compute_energy */
