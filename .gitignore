@@ -10,8 +10,8 @@ mpi/Lab1/log
 mpi/Lab2/gmon.out
 mpi/Lab2/nbody_basic
 mpi/Lab2/nbody_red
-mpi/Lab2/mpi_nbody_basic
-mpi/Lab2/mpi_nbody_red
+mpi/Lab2/pth_nbody_basic
+mpi/Lab2/pth_nbody_red
 mpi/Lab2/output
 mpi/Lab2/profiling.txt
 
