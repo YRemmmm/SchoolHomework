@@ -217,6 +217,8 @@ void Compute_force(int part, double forces[], double masses[], double positions[
    double mg; 
    double f_part_k[DIM];
    double len, len_3, fact;
+   double sum_forces_X = 0.0;
+   double sum_forces_Y = 0.0;
 
    for (k = part + 1; k < n; k++) {
       f_part_k[X] = positions[part * DIM + X] - positions[k * DIM + X];
@@ -228,11 +230,14 @@ void Compute_force(int part, double forces[], double masses[], double positions[
       f_part_k[X] *= fact;
       f_part_k[Y] *= fact;
 
-      forces[part * DIM + X] += f_part_k[X];
-      forces[part * DIM + Y] += f_part_k[Y];
+      sum_forces_X += f_part_k[X];
+      sum_forces_Y += f_part_k[Y];
       forces[k * DIM + X] -= f_part_k[X];
       forces[k * DIM + Y] -= f_part_k[Y];
    }
+
+   forces[part * DIM + X] += sum_forces_X;
+   forces[part * DIM + Y] += sum_forces_Y;
 }  
 
 void Update_part(int part, double forces[], double masses[], double positions[], double velocities[], int n, double delta_t) {
