@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
    // Create the window
    const int ARRAY_SIZE = 1;
    MPI_Win win;
-   MPI_Win_allocate_shared(n*sizeof(struct particle_s), sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
+   // MPI_Win_allocate_shared(n*sizeof(struct particle_s), sizeof(struct particle_s), MPI_INFO_NULL, MPI_COMM_WORLD, &curr, &win);
    
 
    // Allocate shared memory
@@ -171,13 +171,13 @@ int main(int argc, char* argv[]) {
    
    for (step = 1; step <= n_steps; step++) {
       t = step*delta_t;
+      // MPI_Win_fence(0, win);
       for (part = n_start; part < n_end; part++)
          Compute_force(n_start, part, forces, curr, n);
 
       MPI_Win_fence(0, win);
       for (part = n_start; part < n_end; part++)
          Update_part(n_start, part, forces, curr, n, delta_t);
-      MPI_Win_fence(0, win);
 
 #     ifdef COMPUTE_ENERGY
       Compute_energy(curr, n, &kinetic_energy, &potential_energy);
