@@ -15,5 +15,13 @@ mpi/Lab2/pth_nbody_red
 mpi/Lab2/output
 mpi/Lab2/profiling.txt
 
+mpi/Lab3/gmon.out
+mpi/Lab3/nbody_basic
+mpi/Lab3/nbody_red
+mpi/Lab3/omp_nbody_basic
+mpi/Lab3/omp_nbody_red
+mpi/Lab3/output
+mpi/Lab3/profiling.txt
+
 buffer*
 .vscode

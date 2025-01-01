@@ -1,0 +1,98 @@
+
+CUDA Device #0
+Name:                          NVIDIA GeForce RTX 3090
+Total global memory:           3955949568
+Major revision number:         8
+Minor revision number:         6
+---------------Read PGM-----------------
+size:P5
+Image size: 512 x 512
+v_max:255
+Read the picture succeed!
+
+--------------------------------
+Starting CPU processing...
+write the file............
+Write new file (cpu_blur_3x3) succeed!
+
+The time of calculating is :6.653000 ms
+--------------------------------
+Starting CPU processing...
+write the file............
+Write new file (cpu_blur_5x5) succeed!
+
+The time of calculating is :15.302000 ms
+--------------------------------
+Starting CPU processing...
+write the file............
+Write new file (cpu_median_3x3) succeed!
+
+The time of calculating is :58.761000 ms
+--------------------------------
+Starting CPU processing...
+write the file............
+Write new file (cpu_median_5x5) succeed!
+
+The time of calculating is :466.144000 ms
+--------------------------------
+Starting GPU processing...
+GPU warm-up finished
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_blur_3x3) succeed!
+
+The time of calculating is :49.508705 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_blur_5x5) succeed!
+
+The time of calculating is :42.008160 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_shared_blur_3x3) succeed!
+
+The time of calculating is :19.989281 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_shared_blur_5x5) succeed!
+
+The time of calculating is :40.067776 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_median_3x3) succeed!
+
+The time of calculating is :47.554016 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_median_5x5) succeed!
+
+The time of calculating is :20.005793 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_shared_median_3x3) succeed!
+
+The time of calculating is :20.029184 ms
+--------------------------------
+Starting GPU processing...
+write the file............
+Write new file (gpu_shared_median_5x5) succeed!
+
+The time of calculating is :13.666528 ms
+
+
+
+Results are correct.
+CPU taken: 4719.444000 ms
+GPU taken: 26.399488 ms
+G/C Speedup: 178.770282
+Results are incorrect.
+GPU taken: 26.399488 ms
+GPU Shared taken: 0.016704 ms
+G/S Speedup: 1580.429095
