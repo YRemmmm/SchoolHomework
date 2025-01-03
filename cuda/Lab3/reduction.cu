@@ -72,7 +72,7 @@ __global__ void gpu_reduction_basic(int* A, int* sum, int N)
     }
 }
 
-__global__ void gpu_reduction_batter(int* A, int* sum, int N)
+__global__ void gpu_reduction_better(int* A, int* sum, int N)
 {
     __shared__ int partSum[2 * BLOCK_SIZE];
   	int tx = threadIdx.x;
@@ -143,7 +143,7 @@ int main (int argc, char argv[]) {
 
     // gpu_reduction_basic<<<blocksPerBlock, threadsPerBlock>>>(d_A, d_sum, N);
 
-    gpu_reduction_batter<<<blocksPerBlock, threadsPerBlock>>>(d_A, d_sum, N);
+    gpu_reduction_better<<<blocksPerBlock, threadsPerBlock>>>(d_A, d_sum, N);
     
     cudaDeviceSynchronize();
     end = get_time_in_ms();

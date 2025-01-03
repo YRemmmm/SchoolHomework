@@ -103,7 +103,7 @@ __global__ void gpu_scan_basic_y(int* A, int N)
     }
 }
 
-__global__ void gpu_scan_batter_x(int* A, int N)
+__global__ void gpu_scan_better_x(int* A, int N)
 {
     __shared__ int sharedA[BLOCK_SIZE];
   	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -135,7 +135,7 @@ __global__ void gpu_scan_batter_x(int* A, int N)
     }
 }
 
-__global__ void gpu_scan_batter_y(int* A, int N)
+__global__ void gpu_scan_better_y(int* A, int N)
 {
     __shared__ int sharedA[BLOCK_SIZE];
   	int i = blockDim.x * threadIdx.x + blockIdx.x;
@@ -208,12 +208,14 @@ int main (int argc, char argv[]) {
     gpu_warm<<<blocksPerBlock, threadsPerBlock>>>();
     start = get_time_in_ms();
 
-    gpu_scan_basic_x<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
-    gpu_scan_basic_y<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
+    // gpu_scan_basic_x<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
+    // cudaDeviceSynchronize();
+    // gpu_scan_basic_y<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
 
-    // gpu_scan_batter_x<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
-    // gpu_scan_batter_y<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
-    
+    gpu_scan_better_x<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
+    cudaDeviceSynchronize();
+    gpu_scan_better_y<<<blocksPerBlock, threadsPerBlock>>>(d_A, N);
+
     cudaDeviceSynchronize();
     end = get_time_in_ms();
     printf("gpu cost: %f ms\n", end - start);
