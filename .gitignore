@@ -1,3 +1,9 @@
+buffer*
+.vscode
+
+
+cuda/Lab*/main
+
 mpi/Lab*/gmon.out
 mpi/Lab*/nbody_basic
 mpi/Lab*/nbody_red
@@ -7,5 +13,3 @@ mpi/Lab*/output
 mpi/Lab*/profiling.txt
 mpi/Lab*/log
 
-buffer*
-.vscode
