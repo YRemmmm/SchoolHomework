@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: cluster-ingress-class
+  namespace: cluster-system
+spec:
+  controller: k8s.io/ingress-nginx
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cluster-ingress
+  namespace: cluster-system
+spec:
+  rules:
+  - host: m1.sample.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: tomcat-cluster1
+            port:
+              number: 8080
+  - host: m2.sample.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:	
+          service:
+            name: tomcat-cluster2
+            port:
+              number: 8080

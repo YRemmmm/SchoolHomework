@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-tomcat2
+  labels:
+    name: pv-tomcat2
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data/tomcat2"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-tomcat2
+spec:
+  selector:
+    matchLabels:
+      name: pv-tomcat2
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tomcat-cluster2
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tomcat-cluster2
+  template:
+    metadata:
+      labels:
+        app: tomcat-cluster2
+    spec:
+      containers:
+      - name: tomcat-cluster2
+        image: lengcz/tomcat:1.0
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /usr/local/apache-tomcat-9.0.60/webapps/ROOT
+          name: tomcat-storage
+        ports:
+        - containerPort: 8080
+        resources: {}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - name: tomcat-storage
+        persistentVolumeClaim:
+          claimName: pvc-tomcat2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tomcat-service2
+spec:
+  type: ClusterIP
+  clusterIP: 10.233.0.22
+  ports:
+    - port: 8080
+  selector:
+    app: tomcat-cluster2

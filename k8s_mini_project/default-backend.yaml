@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment				# 使用Deployment创建default backend Pod
+metadata:
+  name: default-http-backend
+  namespace: cluster-system
+  labels:
+    app: default-http-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: default-http-backend
+  template:
+    metadata:
+      labels:
+        app: default-http-backend
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - image: registry.cn-hangzhou.aliyuncs.com/google_containers/defaultbackend:1.4
+        name: default-http-backend
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: default-http-backend
+  namespace: cluster-system
+  labels:
+    app: default-http-backend
+spec:
+  selector:
+    app: default-http-backend
+  ports:
+  - port: 80
+    targetPort: 8080
