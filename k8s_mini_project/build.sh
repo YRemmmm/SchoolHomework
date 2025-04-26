@@ -27,6 +27,7 @@ kubectl create -f tomcat-cluster2.yaml
 kubectl create namespace lishanbin-service
 kubectl apply -f redis-cluster.yaml -n lishanbin-service
 
+sleep 60
 NAMESPACE="lishanbin-service"
 APP_LABEL="app=redis-cluster"
 NODES=$(kubectl get pods -n $NAMESPACE -l $APP_LABEL -o jsonpath='{range.items[*]}{.status.podIP}:6379 ')
