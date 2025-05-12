@@ -1,0 +1,17 @@
+{
+  "services":[
+  {
+    "name":"consul-front",
+    "tags":["tomcat"],
+    "address": "192.168.137.2",
+    "port":30001,
+    "check":{
+      "id":"192.168.137.2_front_tomcat",
+      "name":"front web tomcat",
+      "http":"http://192.168.137.2:30001/index.jsp",
+      "interval": "50s",
+      "timeout": "100s"
+    }
+  }
+  ]
+}

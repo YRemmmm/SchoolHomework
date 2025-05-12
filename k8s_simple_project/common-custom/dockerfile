@@ -1,0 +1,13 @@
+FROM tomcat:10.0.14
+WORKDIR /usr/local
+RUN rm -rf /usr/local/openjdk-11
+ADD jdk-17_linux-x64_bin.tar.gz /usr/local
+ENV JAVA_HOME /usr/local/jdk-17.0.7
+ENV PATH ${PATH}:${JAVA_HOME}/bin:$CATALINA_HOME/bin
+ENV CLASSPATH .:${JAVA_HOME}/lib/dt.jar:${JAVA_HOME}/lib/tools.jar
+COPY ./server.xml /usr/local/tomcat/conf/
+COPY ./catalina.sh /usr/local/tomcat/bin/
+RUN chmod 777 /usr/local/tomcat/bin/*.sh
+EXPOSE 8080
+ENTRYPOINT /usr/local/tomcat/bin/startup.sh && tail -f /usr/local/tomcat/logs/catalina.out
+

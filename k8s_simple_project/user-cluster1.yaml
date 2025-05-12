@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-user1
+  labels:
+    name: pv-user1
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data/user1"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-user1
+spec:
+  selector:
+    matchLabels:
+      name: pv-user1
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-cluster1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-cluster1
+  template:
+    metadata:
+      labels:
+        app: user-cluster1
+    spec:
+      containers:
+      - name: user-cluster1
+        image: user:1.0
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /usr/local/tomcat/webapps
+          name: user-storage
+        ports:
+        - containerPort: 8080
+        resources: {}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - name: user-storage
+        persistentVolumeClaim:
+          claimName: pvc-user1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service1
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+  selector:
+    app: user-cluster1
